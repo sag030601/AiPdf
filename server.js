@@ -15,6 +15,18 @@ dotenv.config();
 
 const app = express();
 const PORT = 5000;
+
+
+
+app.use(cors({
+  origin: 'http://localhost:3000', // 👈 Full protocol required
+  credentials: true                // Optional: needed if sending cookies/auth
+}));
+
+app.use(express.json()); // 👈 This enables JSON parsing
+app.use(express.urlencoded({ extended: true }));
+
+
 console.log(process.env.OPENAI_API_KEY); // optional debug
 
 // MongoDB
@@ -92,15 +104,35 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 // Document summary fetch
-app.get('/api/document/:id', async (req, res) => {
+app.post('/api/document/:id/ask', async (req, res) => {
+  const { question } = req.body;
   try {
     const doc = await Document.findById(req.params.id);
-    if (!doc) return res.status(404).json({ error: 'Not found' });
-    res.status(200).json(doc);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    const prompt = `Answer the following question based on this document:\n${doc.fullText}\n\nQuestion: ${question}`;
+
+
+    // Use llama2 via Ollama
+    const result = await axios.post('http://localhost:11434/api/chat', {
+      model: 'llama2',
+      messages: [
+        { role: "user", content: prompt }
+      ],
+      stream: false
+    });
+
+    console.log("result", result)
+
+    const answer = result.data?.message?.content || "No answer received.";
+    res.status(200).json({ answer });
+
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch document' });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to get answer' });
   }
 });
+
 
 // Ask questions
 app.post('/api/document/:id/ask', async (req, res) => {
@@ -117,3 +149,6 @@ app.post('/api/document/:id/ask', async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+
+
+export default app;

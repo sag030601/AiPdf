@@ -1,63 +1,89 @@
-// 📁 server.js
-const express = require('express');
-const mongoose = require('mongoose');
-const multer = require('multer');
-const fs = require('fs');
-const cors = require('cors');
-const OpenAI = require('openai');
-const dotenv = require('dotenv');
+// server.js
+import express from 'express';
+import mongoose from 'mongoose';
+import multer from 'multer';
+import fs from 'fs';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import axios from 'axios';
 
-const Document = require('./models/Document'); // remove `.js`
-const extractTextFromFile = require('./utils/textExtractor');
+import Document from './models/Document.js'; // keep .js in ESM
+import extractTextFromFile, { splitIntoChunks } from './utils/textExtractor.js';
+// import { askOllama } from './utils/ollamaClient.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = 5000;
+console.log(process.env.OPENAI_API_KEY); // optional debug
 
-// 🔐 OpenAI Config
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// MongoDB
+mongoose.connect('mongodb://localhost:27017', {
+  // these options are not needed in Mongoose 8+
 });
 
-app.use(cors());
-app.use(express.json());
-
-// 📦 MongoDB Connection
-mongoose.connect('mongodb+srv://sagarsingh030601:<9867589566>@cluster0.yk04jps.mongodb.net/', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
-
-// 📁 Multer Setup
+// Multer setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
 });
 const upload = multer({ storage });
 
-// 📌 Upload Route
+async function summarizeChunk(chunk) {
+  const prompt = `Summarize this document chunk and extract key points:\n\n${chunk}`;
+  try {
+    const res = await axios.post('http://localhost:11434/api/chat', {
+      model: 'llama2',
+      messages: [
+        // { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: prompt }
+      ],
+      stream: false
+    });
+
+    console.log('Full API response:', JSON.stringify(res.data, null, 2));
+    return res.data?.message?.content || '';
+  } catch (err) {
+    console.error('Error summarizing chunk:', err);
+    return '';
+  }
+}
+
+
+async function summarizeLargeDocument(documentText) {
+  const chunks = splitIntoChunks(documentText);
+  const summaries = [];
+
+  for (const chunk of chunks) {
+    const summary = await summarizeChunk(chunk);
+    summaries.push(summary);
+  }
+
+  return summaries.join('\n\n');
+}
+
+
+// Upload route
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     const filePath = req.file.path;
     const textContent = await extractTextFromFile(filePath);
+    console.log("textContent", textContent);
 
     const prompt = `Summarize this document and extract key points:\n\n${textContent}`;
+    // const responseText = await askOllama(prompt);
+    const responseText = await summarizeLargeDocument(textContent);
 
-    const aiRes = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{ role: 'user', content: prompt }],
-    });
+    console.log("responseText", responseText);
 
-    const responseText = aiRes.choices[0].message.content;
 
     const doc = new Document({
       filename: req.file.originalname,
       summary: responseText,
       fullText: textContent,
     });
-    await doc.save();
 
+    await doc.save();
     res.status(200).json(doc);
   } catch (err) {
     console.error(err);
@@ -65,7 +91,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// 📌 Get Document Summary
+// Document summary fetch
 app.get('/api/document/:id', async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
@@ -76,19 +102,14 @@ app.get('/api/document/:id', async (req, res) => {
   }
 });
 
-// 📌 Ask Question About Document
+// Ask questions
 app.post('/api/document/:id/ask', async (req, res) => {
   const { question } = req.body;
   try {
     const doc = await Document.findById(req.params.id);
     const prompt = `Answer the following question based on this document:\n${doc.fullText}\n\nQuestion: ${question}`;
-
-    const aiRes = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    res.status(200).json({ answer: aiRes.choices[0].message.content });
+    // const answer = await askOllama(prompt);
+    res.status(200).json({ answer });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to get answer' });

@@ -30,7 +30,7 @@ app.use(express.urlencoded({ extended: true }));
 console.log(process.env.OPENAI_API_KEY); // optional debug
 
 // MongoDB
-mongoose.connect('mongodb+srv://sagarsingh030601:sagar@1234@cluster0.yk04jps.mongodb.net/', {
+mongoose.connect('mongodb+srv://sagarsingh030601:sagar@1234@cluster0.yk04jps.mongodb.net/AiPdf', {
   // these options are not needed in Mongoose 8+
 });
 

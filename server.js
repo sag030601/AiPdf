@@ -55,7 +55,7 @@ async function summarizeChunk(chunk) {
   const prompt = `Summarize this document chunk and extract key points:\n\n${chunk}`;
   try {
     const res = await axios.post(`${MODEL_API}/api/chat`, {
-      model: "llama2",
+      model: "tinyllama",
       messages: [
         // { role: "system", content: "You are a helpful assistant." },
         { role: "user", content: prompt },

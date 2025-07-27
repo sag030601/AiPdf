@@ -30,7 +30,7 @@ app.use(express.urlencoded({ extended: true }));
 console.log(process.env.OPENAI_API_KEY); // optional debug
 
 // MongoDB
-mongoose.connect('mongodb+srv://sagarsingh030601:9821879516@cluster0.yk04jps.mongodb.net/ecommerce_nextjs', {
+mongoose.connect('mongodb+srv://sagarsingh030601:9821879516@cluster0.yk04jps.mongodb.net/', {
   // these options are not needed in Mongoose 8+
 });
 

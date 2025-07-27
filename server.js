@@ -142,7 +142,7 @@ app.post("/api/document/:id/ask", async (req, res) => {
 
     // Use llama2 via Ollama
     const result = await axios.post("http://localhost:11434/api/chat", {
-      model: "llama2",
+      model: "tinyllama",
       messages: [{ role: "user", content: prompt }],
       stream: false,
     });

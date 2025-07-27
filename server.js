@@ -1,14 +1,14 @@
 // server.js
-import express from 'express';
-import mongoose from 'mongoose';
-import multer from 'multer';
-import fs from 'fs';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import axios from 'axios';
+import express from "express";
+import mongoose from "mongoose";
+import multer from "multer";
+import fs from "fs";
+import cors from "cors";
+import dotenv from "dotenv";
+import axios from "axios";
 
-import Document from './models/Document.js'; // keep .js in ESM
-import extractTextFromFile, { splitIntoChunks } from './utils/textExtractor.js';
+import Document from "./models/Document.js"; // keep .js in ESM
+import extractTextFromFile, { splitIntoChunks } from "./utils/textExtractor.js";
 // import { askOllama } from './utils/ollamaClient.js';
 
 dotenv.config();
@@ -16,51 +16,60 @@ dotenv.config();
 const app = express();
 const PORT = 5000;
 
-
-
-app.use(cors({
-  origin: 'http://localhost:3000', // 👈 Full protocol required
-  credentials: true                // Optional: needed if sending cookies/auth
-}));
+app.use(
+  cors({
+    origin: "http://localhost:3000", // 👈 Full protocol required
+    credentials: true, // Optional: needed if sending cookies/auth
+  })
+);
 
 app.use(express.json()); // 👈 This enables JSON parsing
 app.use(express.urlencoded({ extended: true }));
 
-
 console.log(process.env.OPENAI_API_KEY); // optional debug
 
 // MongoDB
-mongoose.connect('mongodb+srv://sagarsingh030601:sagar@1234@cluster0.yk04jps.mongodb.net/AiPdf', {
-  // these options are not needed in Mongoose 8+
+// const uri = 'mongodb+srv://sagarsingh030601:sagar%40123NEW@cluster0.yk04jps.mongodb.net/AiPdf';
+// const { MongoClient, ServerApiVersion } = require('mongodb');
+import { MongoClient, ServerApiVersion } from "mongodb";
+
+const uri =
+  "mongodb+srv://sagar030601:<db_password>@cluster0.yk04jps.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
 });
 
-// Multer setup
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname),
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
+
 const upload = multer({ storage });
 
 async function summarizeChunk(chunk) {
   const prompt = `Summarize this document chunk and extract key points:\n\n${chunk}`;
   try {
-    const res = await axios.post('http://localhost:11434/api/chat', {
-      model: 'llama2',
+    const res = await axios.post("http://localhost:11434/api/chat", {
+      model: "llama2",
       messages: [
         // { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: prompt }
+        { role: "user", content: prompt },
       ],
-      stream: false
+      stream: false,
     });
 
-    console.log('Full API response:', JSON.stringify(res.data, null, 2));
-    return res.data?.message?.content || '';
+    console.log("Full API response:", JSON.stringify(res.data, null, 2));
+    return res.data?.message?.content || "";
   } catch (err) {
-    console.error('Error summarizing chunk:', err);
-    return '';
+    console.error("Error summarizing chunk:", err);
+    return "";
   }
 }
-
 
 async function summarizeLargeDocument(documentText) {
   const chunks = splitIntoChunks(documentText);
@@ -71,12 +80,11 @@ async function summarizeLargeDocument(documentText) {
     summaries.push(summary);
   }
 
-  return summaries.join('\n\n');
+  return summaries.join("\n\n");
 }
 
-
 // Upload route
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
     const filePath = req.file.path;
     const textContent = await extractTextFromFile(filePath);
@@ -88,7 +96,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 
     console.log("responseText", responseText);
 
-
     const doc = new Document({
       filename: req.file.originalname,
       summary: responseText,
@@ -99,43 +106,38 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     res.status(200).json(doc);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to process document' });
+    res.status(500).json({ error: "Failed to process document" });
   }
 });
 
 // Document summary fetch
-app.post('/api/document/:id/ask', async (req, res) => {
+app.post("/api/document/:id/ask", async (req, res) => {
   const { question } = req.body;
   try {
     const doc = await Document.findById(req.params.id);
-    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    if (!doc) return res.status(404).json({ error: "Document not found" });
 
     const prompt = `Answer the following question based on this document:\n${doc.fullText}\n\nQuestion: ${question}`;
 
-
     // Use llama2 via Ollama
-    const result = await axios.post('http://localhost:11434/api/chat', {
-      model: 'llama2',
-      messages: [
-        { role: "user", content: prompt }
-      ],
-      stream: false
+    const result = await axios.post("http://localhost:11434/api/chat", {
+      model: "llama2",
+      messages: [{ role: "user", content: prompt }],
+      stream: false,
     });
 
-    console.log("result", result)
+    console.log("result", result);
 
     const answer = result.data?.message?.content || "No answer received.";
     res.status(200).json({ answer });
-
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to get answer' });
+    res.status(500).json({ error: "Failed to get answer" });
   }
 });
 
-
 // Ask questions
-app.post('/api/document/:id/ask', async (req, res) => {
+app.post("/api/document/:id/ask", async (req, res) => {
   const { question } = req.body;
   try {
     const doc = await Document.findById(req.params.id);
@@ -144,11 +146,12 @@ app.post('/api/document/:id/ask', async (req, res) => {
     res.status(200).json({ answer });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to get answer' });
+    res.status(500).json({ error: "Failed to get answer" });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
-
+app.listen(PORT, () =>
+  console.log(`🚀 Server running on http://localhost:${PORT}`)
+);
 
 export default app;

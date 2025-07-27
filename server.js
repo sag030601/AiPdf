@@ -54,7 +54,7 @@ const upload = multer({ storage });
 async function summarizeChunk(chunk) {
   const prompt = `Summarize this document chunk and extract key points:\n\n${chunk}`;
   try {
-    const res = await axios.post("http://localhost:11434/api/chat", {
+    const res = await axios.post(`${MODEL_API}/api/chat`, {
       model: "llama2",
       messages: [
         // { role: "system", content: "You are a helpful assistant." },
@@ -82,6 +82,27 @@ async function summarizeLargeDocument(documentText) {
 
   return summaries.join("\n\n");
 }
+
+
+const MODEL_API = process.env.MODEL_API || 'http://ollama:11434';
+
+app.post('/api/generate', async (req, res) => {
+  const { prompt } = req.body;
+
+  try {
+    const response = await axios.post(`${MODEL_API}/api/generate`, {
+      model: 'llama2',
+      prompt,
+      stream: false
+    });
+
+    res.json({ output: response.data.response });
+  } catch (err) {
+    console.error(err.message || err.response?.data);
+    res.status(500).json({ error: 'AI model error' });
+  }
+});
+
 
 // Upload route
 app.post("/api/upload", upload.single("file"), async (req, res) => {
